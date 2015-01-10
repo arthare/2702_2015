@@ -1,0 +1,7 @@
+const int WINCH_PWM=3;
+const int DRIVE_LEFT_FRONT_PWM=4;
+const int DRIVE_LEFT_BACK_PWM=5;
+const int DRIVE_RIGHT_FRONT_PWM=6;
+const int DRIVE_RIGHT_BACK_PWM=7;
+const int DRIVER_JOYSTICK_PORT=0;
+const int OPERATOR_JOYSTICK_PORT=1;
