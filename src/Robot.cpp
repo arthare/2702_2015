@@ -36,8 +36,8 @@ public:
 	void Neutral()
 	{
 		offtime=Timer::GetFPGATimestamp();
-				fwdsol->Set(false);
-				revsol->Set(false);
+		fwdsol->Set(false);
+		revsol->Set(false);
 	}
 	void Tick()
 	{
@@ -48,11 +48,90 @@ public:
 	}
 private:
 	double offtime;
-Solenoid*fwdsol;
-Solenoid*revsol;
-
+	Solenoid*fwdsol;
+	Solenoid*revsol;
 };
+class Pickup
+{
+public:
+	void tick()
+	{
+		float winchpower=opstick->GetRawAxis(Joystick::kDefaultYAxis);
+		switch(mystate)
+		{
+		case DRIVE:
+			if(stick->GetRawButton(LIFT_BUTTON))
+			{
+				Setstate(LIFT,"pressed lift button");
+			}
+			else
+			{
+				//Driving and winch done by operator control
+			}
+			break;
+		case LIFT:
+			if(!stick->GetRawButton(LIFT_BUTTON))
+			{
+				Setstate(DRIVE, "released lift button");
+			}
+			else if(dropoffsensor->Get())
+			{
+				Setstate(GOBACK,"hit dropoff sensor");
+			}
+			else
+			{
+				winchpower=1;
+			}
+			break;
+		case GOBACK:
+			if(!stick->GetRawButton(LIFT_BUTTON))
+			{
+				Setstate(DRIVE,"released lift button");
+			}
+			else if(bottomsensor->Get())
+			{
+				Setstate(DRIVE,"hit bottom sensor");
+			}else
+			{
+				winchpower=-.5;
+			}
+			break;
+		}
+		winch->Set(winchpower);
+		drive->ArcadeDrive(stick);
+	}
+	Pickup(Joystick*_stick,RobotDrive*_drive,DigitalInput*_dropoffsensor,SpeedController*_winch,DigitalInput*_bottomsensor,Joystick*_opstick)
+	:
+		mystate(DRIVE),
+		stick(_stick),
+		drive(_drive),
+		dropoffsensor(_dropoffsensor),
+		winch(_winch),
+		bottomsensor(_bottomsensor),
+		opstick(_opstick)
+	{
 
+	}
+private:
+	enum PICKSTATE
+		{
+			DRIVE,
+			LIFT,
+			GOBACK,
+		};
+	void Setstate(PICKSTATE newstate, const char* reason)
+	{
+		printf("Changed state from %d to %d because '%s'\n", mystate, newstate, reason);
+		mystate=newstate;
+	}
+	PICKSTATE mystate;
+	Joystick*stick;
+	RobotDrive*drive;
+	DigitalInput*dropoffsensor;
+	SpeedController*winch;
+	DigitalInput*bottomsensor;
+	Joystick*opstick;
+};
 class Robot: public OurSampleRobot
 {
 #ifdef FRC2014
@@ -69,7 +148,9 @@ class Robot: public OurSampleRobot
 	Solenoid closeholder;
 	Solenoid openholder;
 	Piston holderpiston;
-
+	DigitalInput dropoffsensor;
+	DigitalInput bottomsensor;
+	Pickup pickup;
 
 public:
 	Robot() :
@@ -86,7 +167,10 @@ public:
 			tiltpiston(&tiltforward, &tiltback),
 			closeholder(CLOSE_HOLDER_SOLENOID),
 			openholder(OPEN_HOLDER_SOLENOID),
-			holderpiston(&openholder, &closeholder)
+			holderpiston(&openholder, &closeholder),
+			dropoffsensor(DROPOFF_LIMIT_DIO),
+			bottomsensor(BOTTOM_LIMIT_DIO),
+			pickup(&stick,&myRobot,&dropoffsensor,&winch,&bottomsensor,&opstick)
 
 	{
 		myRobot.SetExpiration(0.1);
@@ -106,7 +190,9 @@ public:
 		const double outputturnsperwheelturn=drivenwheelgearteeth/outputteeth;
 		const double ticksperwheelturn=ticksperencrev*outputturnsperwheelturn;
 		const double ticksperinch=ticksperwheelturn/inchesperwheelturn;
-		const double tickswanted=ticksperinch*inches;
+
+		const double tickswanted=ticksperinch*inches+rightencoder.GetRaw();
+
 		while(true)
 		{
 			if(rightencoder.GetRaw()<tickswanted)
@@ -145,7 +231,7 @@ public:
 			this->GetWatchdog().Feed();
 
 #endif
-			winch.Set(opstick.GetRawAxis(Joystick::kDefaultYAxis));
+			pickup.tick();
 			// handling the tilt piston
 			if(stick.GetRawButton(TILT_BACK_BUTTON))
 			{
