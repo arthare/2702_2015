@@ -80,7 +80,7 @@ public:
 			}
 			else
 			{
-				winchpower=1;
+				winchpower=-1;
 			}
 			break;
 		case GOBACK:
@@ -93,7 +93,7 @@ public:
 				Setstate(DRIVE,"hit bottom sensor");
 			}else
 			{
-				winchpower=-.5;
+				winchpower=.5;
 			}
 			break;
 		}
@@ -141,6 +141,8 @@ class Robot: public OurSampleRobot
 	RobotDrive myRobot; //Our robot drive system
 	Joystick stick; // only joystick
 	Joystick opstick;
+	DigitalInput rightencA;
+	DigitalInput rightencB;
 	Encoder rightencoder;
 	Solenoid tiltback;
 	Solenoid tiltforward;
@@ -161,7 +163,9 @@ public:
 			myRobot(DRIVE_LEFT_FRONT_PWM, DRIVE_LEFT_BACK_PWM,DRIVE_RIGHT_FRONT_PWM, DRIVE_RIGHT_BACK_PWM),	// initialize the RobotDrive to use motor controllers on ports 0 and 1
 			stick(DRIVER_JOYSTICK_PORT),
 			opstick(OPERATOR_JOYSTICK_PORT),
-			rightencoder(RIGHT_ENCODER_A_DIO, RIGHT_ENCODER_B_DIO),
+			rightencA(RIGHT_ENCODER_A_DIO),
+			rightencB(RIGHT_ENCODER_B_DIO),
+			rightencoder(rightencA, rightencB, true, Encoder::k1X),
 			tiltback(TILT_BACK_SOLENOID),
 			tiltforward(TILT_FORWARD_SOLENOID),
 			tiltpiston(&tiltforward, &tiltback),
@@ -178,13 +182,41 @@ public:
 		compressor.Start();
 #endif
 	}
-
-	void DriveTo(double inches)
+	virtual void RobotInit()
 	{
-		const double ticksperencrev=350;
+		rightencoder.Start();
+	}
+
+	class DriveToStopper
+	{
+	public:
+		virtual bool ShouldContinueDriveTo() = 0;
+	};
+	class OperatorControlDriveToStopper : public DriveToStopper
+	{
+	public:
+		virtual bool ShouldContinueDriveTo()
+		{
+			DriverStation* ds = DriverStation::GetInstance();
+			return ds->IsEnabled() && ds->IsOperatorControl();
+		}
+	};
+	class AutonomousDriveToStopper : public DriveToStopper
+	{
+	public:
+		virtual bool ShouldContinueDriveTo()
+		{
+			DriverStation* ds = DriverStation::GetInstance();
+			return ds->IsEnabled() && ds->IsAutonomous();
+		}
+	};
+
+	void DriveTo(double inches, DriveToStopper*stopper)
+	{
+		const double ticksperencrev=250;
 		const double wheeldiameter=6;
-		const double drivenwheelgearteeth=24;
-		const double outputteeth=8;
+		const double drivenwheelgearteeth=22;
+		const double outputteeth=12;
 
 		const double inchesperwheelturn=PI*wheeldiameter;
 		const double outputturnsperwheelturn=drivenwheelgearteeth/outputteeth;
@@ -193,11 +225,14 @@ public:
 
 		const double tickswanted=ticksperinch*inches+rightencoder.GetRaw();
 
-		while(true)
+		while(stopper->ShouldContinueDriveTo())
 		{
-			if(rightencoder.GetRaw()<tickswanted)
+			const double curTicks = rightencoder.GetRaw();
+			const double ticksToGo = tickswanted - curTicks;
+
+			if(curTicks<tickswanted)
 			{
-				this->myRobot.Drive(0.5,0);
+				this->myRobot.Drive(-0.3,0); //negitive means forward
 			}
 			else
 			{
@@ -226,7 +261,6 @@ public:
 			tiltpiston.Tick();
 			holderpiston.Tick();
 
-
 #ifdef FRC2014
 			this->GetWatchdog().Feed();
 
@@ -250,6 +284,12 @@ public:
 			else if (stick.GetRawButton(CLOSE_HOLDER_BUTTON))
 			{
 				holderpiston.Forward();
+			}
+			if(stick.GetRawButton(DRIVE_TO_BUTTON))
+			{
+				OperatorControlDriveToStopper stopper;
+				this->DriveTo(60,&stopper);
+				//testing driveto
 			}
 		}
 	}

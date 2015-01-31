@@ -6,6 +6,7 @@ const int TILT_FORWARD_BUTTON=2;
 const int OPEN_HOLDER_BUTTON=5;
 const int CLOSE_HOLDER_BUTTON=4;
 const int LIFT_BUTTON=6;
+const int DRIVE_TO_BUTTON=9;
 
 // PWMs
 const int WINCH_PWM=3;
@@ -18,8 +19,8 @@ const int DRIVE_RIGHT_BACK_PWM=7;
 const int COMPRESSOR_RELAY = 1;
 
 // digital IO
-const int RIGHT_ENCODER_A_DIO = 3;
-const int RIGHT_ENCODER_B_DIO = 4;
+const int RIGHT_ENCODER_A_DIO = 9;
+const int RIGHT_ENCODER_B_DIO = 2;
 const int PRESSURE_INPUT_DIO = 5;
 const int BOTTOM_LIMIT_DIO = 13;
 const int DROPOFF_LIMIT_DIO = 14;
