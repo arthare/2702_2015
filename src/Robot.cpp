@@ -181,6 +181,9 @@ class Robot: public OurSampleRobot
 	Solenoid armsforward;
 	Solenoid armsreverse;
 	Piston armspiston;
+	DigitalInput leftencA;
+	DigitalInput leftencB;
+	Encoder leftencoder;
 #endif
 	DigitalInput dropoffsensor;
 	DigitalInput bottomsensor;
@@ -209,6 +212,9 @@ public:
 			armsforward(OPEN_ARMS_SOLENOID),
 			armsreverse(CLOSE_ARMS_SOLENOID),
 			armspiston(&armsforward, &armsreverse),
+			leftencA(LEFT_ENCODER_A_DIO),
+			leftencB(LEFT_ENCODER_B_DIO),
+			leftencoder(&leftencA, &leftencB),
 #endif
 			dropoffsensor(DROPOFF_LIMIT_DIO),
 			bottomsensor(BOTTOM_LIMIT_DIO),
@@ -228,10 +234,10 @@ public:
 #ifdef FRC2014
 		rightencoder.Start();
 #else
-		CameraServer::GetInstance()->SetQuality(50);
-		CameraServer::GetInstance()->
-				//the camera name (ex "cam0") can be found through the roborio web interface
-				CameraServer::GetInstance()->StartAutomaticCapture(CAMERA_NAME);
+		/*CameraServer::GetInstance()->SetQuality(50);
+
+		//the camera name (ex "cam0") can be found through the roborio web interface
+		CameraServer::GetInstance()->StartAutomaticCapture(CAMERA_NAME);*/
 #endif
 	}
 
@@ -259,12 +265,27 @@ public:
 		}
 	};
 
+	//void TurnTo(double inches, DriveToStopper*stopper)
+	//{
+		//const double degeesetoturn=90;
+
+
+	//}
+
 	void DriveTo(double inches, DriveToStopper*stopper)
 	{
+#ifdef FRC2014
 		const double ticksperencrev=250;
 		const double wheeldiameter=6;
 		const double drivenwheelgearteeth=22;
 		const double outputteeth=12;
+#else
+		const double ticksperencrev=360;
+		const double wheeldiameter=6;
+		const double drivenwheelgearteeth=24;
+		const double outputteeth=15;
+#endif
+
 
 		const double inchesperwheelturn=PI*wheeldiameter;
 		const double outputturnsperwheelturn=drivenwheelgearteeth/outputteeth;
@@ -340,7 +361,6 @@ public:
 		GetWatchdog().SetEnabled(false);
 #endif
 		winch.SetSafetyEnabled(false);
-
 		while (IsOperatorControl() && IsEnabled())
 		{
 			tiltpiston.Tick();
