@@ -13,25 +13,51 @@
  */
 class Piston
 {
+	enum CURDIR
+	{
+		UNSET,
+		FORWARD,
+		REVERSE,
+	};
 public:
 	Piston(Solenoid*_fwdsol, Solenoid*_revsol):
 		offtime(Timer::GetFPGATimestamp()),
 		fwdsol(_fwdsol),
-		revsol(_revsol)
+		revsol(_revsol),
+		myDir(UNSET)
+
 	{
 
 	}
 	void Forward()
 	{
-		offtime=Timer::GetFPGATimestamp()+.5;
-		fwdsol->Set(true);
-		revsol->Set(false);
+		if(fwdsol->Get() || myDir == FORWARD)
+		{
+
+		}
+		else
+		{
+
+			myDir = FORWARD;
+			offtime=Timer::GetFPGATimestamp()+.5;
+			fwdsol->Set(true);
+			revsol->Set(false);
+		}
 	}
 	void Reverse()
 	{
-		offtime=Timer::GetFPGATimestamp()+.5;
-		fwdsol->Set(false);
-		revsol->Set(true);
+		if(revsol->Get() || myDir == REVERSE)
+		{
+
+		}
+		else
+		{
+			myDir = REVERSE;
+			offtime=Timer::GetFPGATimestamp()+.5;
+			fwdsol->Set(false);
+			revsol->Set(true);
+
+		}
 	}
 	void Neutral()
 	{
@@ -50,6 +76,7 @@ private:
 	double offtime;
 	Solenoid*fwdsol;
 	Solenoid*revsol;
+	CURDIR myDir;
 };
 class Pickup
 {
@@ -150,9 +177,15 @@ class Robot: public OurSampleRobot
 	Solenoid closeholder;
 	Solenoid openholder;
 	Piston holderpiston;
+#ifndef FRC2014
+	Solenoid armsforward;
+	Solenoid armsreverse;
+	Piston armspiston;
+#endif
 	DigitalInput dropoffsensor;
 	DigitalInput bottomsensor;
 	Pickup pickup;
+	Gyro gyro;
 
 public:
 	Robot() :
@@ -172,11 +205,18 @@ public:
 			closeholder(CLOSE_HOLDER_SOLENOID),
 			openholder(OPEN_HOLDER_SOLENOID),
 			holderpiston(&openholder, &closeholder),
+#ifndef FRC2014
+			armsforward(OPEN_ARMS_SOLENOID),
+			armsreverse(CLOSE_ARMS_SOLENOID),
+			armspiston(&armsforward, &armsreverse),
+#endif
 			dropoffsensor(DROPOFF_LIMIT_DIO),
 			bottomsensor(BOTTOM_LIMIT_DIO),
-			pickup(&stick,&myRobot,&dropoffsensor,&winch,&bottomsensor,&opstick)
+			pickup(&stick,&myRobot,&dropoffsensor,&winch,&bottomsensor,&opstick),
+			gyro(GYRO_ANALOG_CHANNEL)
 
 	{
+
 		myRobot.SetExpiration(0.1);
 #ifdef FRC2014
 		compressor.Start();
@@ -184,7 +224,15 @@ public:
 	}
 	virtual void RobotInit()
 	{
+
+#ifdef FRC2014
 		rightencoder.Start();
+#else
+		CameraServer::GetInstance()->SetQuality(50);
+		CameraServer::GetInstance()->
+				//the camera name (ex "cam0") can be found through the roborio web interface
+				CameraServer::GetInstance()->StartAutomaticCapture(CAMERA_NAME);
+#endif
 	}
 
 	class DriveToStopper
@@ -225,14 +273,26 @@ public:
 
 		const double tickswanted=ticksperinch*inches+rightencoder.GetRaw();
 
+		const double desiredegreese=gyro.GetAngle();
+
 		while(stopper->ShouldContinueDriveTo())
 		{
 			const double curTicks = rightencoder.GetRaw();
 			const double ticksToGo = tickswanted - curTicks;
 
+			double error=desiredegreese - gyro.GetAngle();
+			printf("%f %f \n", curTicks, tickswanted);
+			//right encoder isn't working
 			if(curTicks<tickswanted)
 			{
-				this->myRobot.Drive(-0.3,0); //negitive means forward
+				if(desiredegreese!=gyro.GetAngle())
+				{
+					this->myRobot.Drive(-0.3,error/40);  //negative means forward
+				}
+				else
+				{
+					this->myRobot.Drive(-0.3,0); //negative means forward
+				}
 			}
 			else
 			{
@@ -240,7 +300,32 @@ public:
 				this->myRobot.Drive(0,0);
 				break;
 			}
+			Wait(0.05);
 		}
+	}
+
+	void Autonomous()
+	{
+		myRobot.SetSafetyEnabled(false);
+		winch.SetSafetyEnabled(false);
+		myRobot.SetExpiration(200);
+		winch.SetExpiration(200);
+
+
+#ifdef FRC2014
+		GetWatchdog().SetEnabled(false);
+#endif
+		int automode=0;
+		if(automode==DRIVE_FORWARD)
+		{
+#ifdef FRC2014
+			this->GetWatchdog().Feed();
+#endif
+			AutonomousDriveToStopper stopper;
+			this->DriveTo(DISTANCE_FOR_AUTOMODE_DRIVE_FORWARD,&stopper);
+		}
+
+		myRobot.Drive(0,0);
 	}
 	/**
 	 * Runs the motors with arcade steering.
@@ -254,28 +339,38 @@ public:
 #ifdef FRC2014
 		GetWatchdog().SetEnabled(false);
 #endif
-		
+		winch.SetSafetyEnabled(false);
 
 		while (IsOperatorControl() && IsEnabled())
 		{
 			tiltpiston.Tick();
 			holderpiston.Tick();
 
+			//printf("gyro's current reading %f \n",gyro.GetAngle());
 #ifdef FRC2014
 			this->GetWatchdog().Feed();
-
 #endif
-			pickup.tick();
+			pickup.tick(); //commented out has not been tested
 			// handling the tilt piston
-			if(stick.GetRawButton(TILT_BACK_BUTTON))
-			{
-				tiltpiston.Reverse();
-			}
-			else if(stick.GetRawButton(TILT_FORWARD_BUTTON))
+			if(stick.GetRawButton(TILT_FORWARD_BUTTON))
 			{
 				tiltpiston.Forward();
 			}
-
+			else
+			{
+				tiltpiston.Reverse();
+			}
+#ifndef FRC2014
+			armspiston.Tick();
+			if(stick.GetRawButton(OPEN_ARMS_BUTTON) || opstick.GetRawButton(OP_ARM_OPEN_BUTTON1) || opstick.GetRawButton(OP_ARM_OPEN_BUTTON2))
+			{
+				armspiston.Forward();
+			}
+			else if(stick.GetRawButton(CLOSE_ARMS_BUTTON) || opstick.GetRawButton(OP_ARM_CLOSE_BUTTON))
+			{
+				armspiston.Reverse();
+			}
+#endif
 			// Handling the crate holder
 			if (stick.GetRawButton(OPEN_HOLDER_BUTTON))
 			{
@@ -291,6 +386,8 @@ public:
 				this->DriveTo(60,&stopper);
 				//testing driveto
 			}
+
+			Wait(0.05);
 		}
 	}
 
