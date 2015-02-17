@@ -125,7 +125,7 @@ public:
 			break;
 		}
 		winch->Set(winchpower);
-		drive->ArcadeDrive(stick);
+		drive->ArcadeDrive(stick,true);
 	}
 	Pickup(Joystick*_stick,RobotDrive*_drive,DigitalInput*_dropoffsensor,SpeedController*_winch,DigitalInput*_bottomsensor,Joystick*_opstick)
 	:
@@ -234,10 +234,10 @@ public:
 #ifdef FRC2014
 		rightencoder.Start();
 #else
-		/*CameraServer::GetInstance()->SetQuality(50);
+		CameraServer::GetInstance()->SetQuality(50);
 
 		//the camera name (ex "cam0") can be found through the roborio web interface
-		CameraServer::GetInstance()->StartAutomaticCapture(CAMERA_NAME);*/
+		CameraServer::GetInstance()->StartAutomaticCapture(CAMERA_NAME);
 #endif
 	}
 
@@ -370,7 +370,7 @@ public:
 #ifdef FRC2014
 			this->GetWatchdog().Feed();
 #endif
-			pickup.tick(); //commented out has not been tested
+			pickup.tick();
 			// handling the tilt piston
 			if(stick.GetRawButton(TILT_FORWARD_BUTTON))
 			{
