@@ -1,6 +1,6 @@
 const double PI=3.1415;
 const int DISTANCE_FOR_AUTOMODE_DRIVE_FORWARD = 100;
-const char* CAMERA_NAME = "cma0"; //this is the name of the camera on the roborio
+const char* CAMERA_NAME = "cam1"; //this is the name of the camera on the roborio
 
 // buttons
 const int TILT_FORWARD_BUTTON=3;
