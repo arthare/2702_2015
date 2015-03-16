@@ -44,6 +44,18 @@ public:
 			revsol->Set(false);
 		}
 	}
+	bool IsForward()
+	{
+		if(myDir==FORWARD)
+		{
+			return true;
+		}
+		else if(myDir==REVERSE)
+		{
+			return false;
+		}
+		return false;
+	}
 	void Reverse()
 	{
 		if(revsol->Get() || myDir == REVERSE)
@@ -83,51 +95,9 @@ class Pickup
 public:
 	void tick()
 	{
-		float winchpower=opstick->GetRawAxis(Joystick::kDefaultYAxis);
-		switch(mystate)
-		{
-		case DRIVE:
-			if(stick->GetRawButton(LIFT_BUTTON))
-			{
-				Setstate(LIFT,"pressed lift button");
-			}
-			else
-			{
-				//Driving and winch done by operator control
-			}
-			break;
-		case LIFT:
-			if(!stick->GetRawButton(LIFT_BUTTON))
-			{
-				Setstate(DRIVE, "released lift button");
-			}
-			else if(dropoffsensor->Get())
-			{
-				Setstate(GOBACK,"hit dropoff sensor");
-			}
-			else
-			{
-				winchpower=-1;
-			}
-			break;
-		case GOBACK:
-			if(!stick->GetRawButton(LIFT_BUTTON))
-			{
-				Setstate(DRIVE,"released lift button");
-			}
-			else if(bottomsensor->Get())
-			{
-				Setstate(DRIVE,"hit bottom sensor");
-			}else
-			{
-				winchpower=.5;
-			}
-			break;
-		}
-		winch->Set(winchpower);
-		drive->ArcadeDrive(stick,true);
+
 	}
-	Pickup(Joystick*_stick,RobotDrive*_drive,DigitalInput*_dropoffsensor,SpeedController*_winch,DigitalInput*_bottomsensor,Joystick*_opstick)
+	Pickup(Joystick*_stick,RobotDrive*_drive,DigitalInput*_dropoffsensor,SpeedController*_winch,DigitalInput*_bottomsensor,Joystick*_opstick, Gyro* gyro,DigitalInput*_pickuptest)
 	:
 		mystate(DRIVE),
 		stick(_stick),
@@ -135,9 +105,12 @@ public:
 		dropoffsensor(_dropoffsensor),
 		winch(_winch),
 		bottomsensor(_bottomsensor),
-		opstick(_opstick)
+		opstick(_opstick),
+		gyroWrapper(gyro),
+		turnController(0.020, 0.00005, 0, &gyroWrapper, &pidReceiver),
+		pickuptest(_pickuptest)
 	{
-
+		turnController.Enable();
 	}
 private:
 	enum PICKSTATE
@@ -158,6 +131,34 @@ private:
 	SpeedController*winch;
 	DigitalInput*bottomsensor;
 	Joystick*opstick;
+
+	class GyroWrapper : public PIDSource
+	{
+	public:
+		GyroWrapper(Gyro* gyro) : gyro(gyro),last(0) {};
+		virtual double PIDGet()
+		{
+			double now = gyro->GetRate()*0.3 + last*0.7;
+			last = now;
+			return now;
+		}
+	private:
+		Gyro* gyro;
+		double last;
+	};
+	class PIDReceiver : public PIDOutput
+	{
+	public:
+		virtual void PIDWrite(float output)
+		{
+			m_output = output;
+		}
+		double m_output;
+	};
+	GyroWrapper gyroWrapper;
+	PIDReceiver pidReceiver;
+	PIDController turnController;
+	DigitalInput* pickuptest;
 };
 class Robot: public OurSampleRobot
 {
@@ -165,6 +166,7 @@ class Robot: public OurSampleRobot
 	Compressor compressor;
 #endif
 	Talon winch;
+	Talon stacker;
 	RobotDrive myRobot; //Our robot drive system
 	Joystick stick; // only joystick
 	Joystick opstick;
@@ -177,18 +179,19 @@ class Robot: public OurSampleRobot
 	Solenoid closeholder;
 	Solenoid openholder;
 	Piston holderpiston;
-#ifndef FRC2014
 	Solenoid armsforward;
 	Solenoid armsreverse;
 	Piston armspiston;
+#ifndef FRC2014
 	DigitalInput leftencA;
 	DigitalInput leftencB;
 	Encoder leftencoder;
 #endif
 	DigitalInput dropoffsensor;
 	DigitalInput bottomsensor;
-	Pickup pickup;
 	Gyro gyro;
+	DigitalInput pickuptest;
+	Pickup pickup;
 
 public:
 	Robot() :
@@ -196,6 +199,7 @@ public:
 		compressor(PRESSURE_INPUT_DIO, COMPRESSOR_RELAY),
 #endif
 			winch(WINCH_PWM),
+			stacker(STACKER_PWM),
 			myRobot(DRIVE_LEFT_FRONT_PWM, DRIVE_LEFT_BACK_PWM,DRIVE_RIGHT_FRONT_PWM, DRIVE_RIGHT_BACK_PWM),	// initialize the RobotDrive to use motor controllers on ports 0 and 1
 			stick(DRIVER_JOYSTICK_PORT),
 			opstick(OPERATOR_JOYSTICK_PORT),
@@ -208,19 +212,19 @@ public:
 			closeholder(CLOSE_HOLDER_SOLENOID),
 			openholder(OPEN_HOLDER_SOLENOID),
 			holderpiston(&openholder, &closeholder),
-#ifndef FRC2014
 			armsforward(OPEN_ARMS_SOLENOID),
 			armsreverse(CLOSE_ARMS_SOLENOID),
 			armspiston(&armsforward, &armsreverse),
+#ifndef FRC2014
 			leftencA(LEFT_ENCODER_A_DIO),
 			leftencB(LEFT_ENCODER_B_DIO),
 			leftencoder(&leftencA, &leftencB),
 #endif
 			dropoffsensor(DROPOFF_LIMIT_DIO),
 			bottomsensor(BOTTOM_LIMIT_DIO),
-			pickup(&stick,&myRobot,&dropoffsensor,&winch,&bottomsensor,&opstick),
-			gyro(GYRO_ANALOG_CHANNEL)
-
+			gyro(GYRO_ANALOG_CHANNEL),
+			pickuptest(PICK_UP_LIMIT_DIO),
+			pickup(&stick,&myRobot,&dropoffsensor,&winch,&bottomsensor,&opstick,&gyro,&pickuptest)
 	{
 
 		myRobot.SetExpiration(0.1);
@@ -235,7 +239,6 @@ public:
 		rightencoder.Start();
 #else
 		CameraServer::GetInstance()->SetQuality(50);
-
 		//the camera name (ex "cam0") can be found through the roborio web interface
 		CameraServer::GetInstance()->StartAutomaticCapture(CAMERA_NAME);
 #endif
@@ -348,6 +351,43 @@ public:
 
 		myRobot.Drive(0,0);
 	}
+
+	void DoDriving()
+	{
+		float winchpower=opstick.GetRawAxis(Joystick::kDefaultYAxis);
+
+		if(stick.GetRawButton(LIFT_ARMS_BUTTON))
+		{
+			winchpower=1.0;
+		}
+		else if(stick.GetRawButton(LOWER_ARMS_BUTTON))
+		{
+			winchpower=-0.65;
+		}
+
+		if(stick.GetRawButton(READY_CONTAINER_PICKUP_BUTTON))
+		{
+			this->armspiston.Forward();
+			this->holderpiston.Reverse();
+			winchpower=-0.65;
+		}
+		else if (stick.GetRawButton(LIFT_CONTAINER_BUTTON))
+		{
+			this->armspiston.Reverse();
+			this->holderpiston.Reverse();
+			winchpower=0.65;
+		}
+
+		winch.Set(winchpower);
+
+		// a test art did revealed that the first 0.3 of motor output does nothing, so let's make the joystick powers start at 0.3...
+		float flTurnPower = abs(stick.GetX());
+		flTurnPower *= 0.85;
+		flTurnPower += 0.15;
+		flTurnPower = stick.GetX() > 0 ? flTurnPower : -flTurnPower;
+		myRobot.ArcadeDrive(stick.GetY(),stick.GetX());
+	}
+
 	/**
 	 * Runs the motors with arcade steering.
 	 */
@@ -370,7 +410,20 @@ public:
 #ifdef FRC2014
 			this->GetWatchdog().Feed();
 #endif
-			pickup.tick();
+			if(opstick.GetRawButton(OP_STACK_UP))
+			{
+				stacker.Set(1.0);
+			}
+			else if(opstick.GetRawButton(OP_STACK_DOWN))
+			{
+				stacker.Set(-0.5);
+			}
+			else
+			{
+				stacker.Set(0);
+			}
+			DoDriving();
+
 			// handling the tilt piston
 			if(stick.GetRawButton(TILT_FORWARD_BUTTON))
 			{
@@ -380,17 +433,16 @@ public:
 			{
 				tiltpiston.Reverse();
 			}
-#ifndef FRC2014
 			armspiston.Tick();
-			if(stick.GetRawButton(OPEN_ARMS_BUTTON) || opstick.GetRawButton(OP_ARM_OPEN_BUTTON1) || opstick.GetRawButton(OP_ARM_OPEN_BUTTON2))
+			if(stick.GetRawButton(OPEN_ARMS_BUTTON))
 			{
 				armspiston.Forward();
 			}
-			else if(stick.GetRawButton(CLOSE_ARMS_BUTTON) || opstick.GetRawButton(OP_ARM_CLOSE_BUTTON))
+			else if(stick.GetRawButton(CLOSE_ARMS_BUTTON))
 			{
-				armspiston.Reverse();
+					armspiston.Reverse();
 			}
-#endif
+
 			// Handling the crate holder
 			if (stick.GetRawButton(OPEN_HOLDER_BUTTON))
 			{
@@ -400,13 +452,32 @@ public:
 			{
 				holderpiston.Forward();
 			}
-			if(stick.GetRawButton(DRIVE_TO_BUTTON))
-			{
-				OperatorControlDriveToStopper stopper;
-				this->DriveTo(60,&stopper);
-				//testing driveto
-			}
 
+
+			{ // arm toggle
+				static bool oldopButtons[12] = {0};
+				static bool olddriveButtons[12] = {0};
+				// check for button-presses here
+				if((opstick.GetRawButton(OPSTICK_ARM_TOGGLE) && !oldopButtons[OPSTICK_ARM_TOGGLE]) ||
+						(stick.GetRawButton(DRIVE_ARM_TOGGLE) && !olddriveButtons[DRIVE_ARM_TOGGLE]))
+				{
+					if(armspiston.IsForward())
+					{
+						armspiston.Reverse();
+					}
+					else
+					{
+						armspiston.Forward();
+					}
+				}
+
+
+				for(int x = 0;x < 12; x++)
+				{
+					oldopButtons[x] = opstick.GetRawButton(x);
+					olddriveButtons[x] = stick.GetRawButton(x);
+				}
+			}
 			Wait(0.05);
 		}
 	}

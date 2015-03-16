@@ -6,13 +6,18 @@ const char* CAMERA_NAME = "cam1"; //this is the name of the camera on the robori
 const int TILT_FORWARD_BUTTON=3;
 const int CLOSE_HOLDER_BUTTON=4;
 const int OPEN_HOLDER_BUTTON=5;
-const int LIFT_BUTTON=6;
-const int OPEN_ARMS_BUTTON=7;
-const int CLOSE_ARMS_BUTTON=8;
-const int DRIVE_TO_BUTTON=9;
-const int OP_ARM_OPEN_BUTTON1=4;
-const int OP_ARM_OPEN_BUTTON2=5;
-const int OP_ARM_CLOSE_BUTTON=3;
+const int LIFT_ARMS_BUTTON=6;
+const int LOWER_ARMS_BUTTON=7;
+const int OPEN_ARMS_BUTTON=8;
+const int CLOSE_ARMS_BUTTON=9;
+const int DRIVE_ARM_TOGGLE=1;
+const int READY_CONTAINER_PICKUP_BUTTON=10;
+const int LIFT_CONTAINER_BUTTON=11;
+
+
+const int OPSTICK_ARM_TOGGLE=1;
+const int OP_STACK_UP=6;
+const int OP_STACK_DOWN=7;
 
 // PWMs
 #ifdef FRC2014
@@ -21,6 +26,7 @@ const int DRIVE_LEFT_FRONT_PWM=4;
 const int DRIVE_LEFT_BACK_PWM=5;
 const int DRIVE_RIGHT_FRONT_PWM=6;
 const int DRIVE_RIGHT_BACK_PWM=7;
+const int STACKER_PWM=9;
 #else
 const int WINCH_PWM=5;
 const int DRIVE_LEFT_FRONT_PWM=1;
@@ -39,6 +45,7 @@ const int RIGHT_ENCODER_B_DIO = 14;
 const int PRESSURE_INPUT_DIO = 5;
 const int BOTTOM_LIMIT_DIO = 11;
 const int DROPOFF_LIMIT_DIO = 12;
+const int PICK_UP_LIMIT_DIO = 2;
 #else
 const int RIGHT_ENCODER_A_DIO = 6;
 const int RIGHT_ENCODER_B_DIO = 7;
@@ -47,6 +54,7 @@ const int LEFT_ENCODER_B_DIO = 9;
 const int PRESSURE_INPUT_DIO = 5;
 const int BOTTOM_LIMIT_DIO = 13;
 const int DROPOFF_LIMIT_DIO = 14;
+const int PICK_UP_LIMIT_DIO = 2;
 #endif
 
 // joystick ports
@@ -67,8 +75,10 @@ const int GYRO_ANALOG_CHANNEL=0;
 
 // solenoids
 #ifdef FRC2014
-const int TILT_BACK_SOLENOID=3;
-const int TILT_FORWARD_SOLENOID=4;
+const int TILT_BACK_SOLENOID=1;
+const int TILT_FORWARD_SOLENOID=2;
+const int OPEN_ARMS_SOLENOID=3;
+const int CLOSE_ARMS_SOLENOID=4;
 const int OPEN_HOLDER_SOLENOID=5;
 const int CLOSE_HOLDER_SOLENOID=6;
 #else
